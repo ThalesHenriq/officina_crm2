@@ -264,6 +264,68 @@ elif menu == "📄 Gerar NF-e (PDF)":
             pdf.set_font("Arial", "", 10)
             pdf.cell(0, 10, "Obrigado pela preferência! Oficina Mecânica", align="C")
             
+            # === FIX DO ERRO (obrigatório) ===
+            pdf_bytes = pdf.output(dest="S")
+            if isinstance(pdf_bytes, str):          # ← essa linha resolve o erro
+                pdf_bytes = pdf_bytes.encode("latin1")
+            
+            # Download
+            st.download_button(
+                label="⬇️ Baixar PDF Bonito",
+                data=pdf_bytes,
+                file_name=f"NF-e_OS_{os_id}.pdf",
+                mime="application/pdf"
+            )
+            
+            # ==================== WHATSAPP ====================
+            st.subheader("📱 Enviar por WhatsApp")
+            tel = st.text_input("Telefone do cliente (com DDD, ex: 11987654321)", 
+                                value=cliente['telefone'].replace(" ","").replace("-",""))
+            if tel and len(tel) >= 10:
+                if not tel.startswith("55"):
+                    tel = "55" + tel
+                mensagem = f"Olá! Segue a NF-e da OS #{os_id}\nCliente: {cliente['nome']}\nTotal: R$ {os_data['total']:.2f}\nData: {os_data['data']}\n\nBaixe o PDF em anexo."
+                link = f"https://wa.me/{tel}?text={urllib.parse.quote(mensagem)}"
+                st.link_button("📱 ABRIR WHATSAPP AGORA", link)
+                st.info("✅ Baixe o PDF primeiro e anexe no WhatsApp")
+            else:
+                st.warning("Digite o telefone corretamente")
+    else:
+        st.warning("Nenhuma OS cadastrada ainda.")
+            
+            # ==================== GERA PDF ====================
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", "B", 16)
+            pdf.cell(0, 15, "NOTA FISCAL ELETRÔNICA", align="C", ln=1)
+            pdf.set_font("Arial", "", 12)
+            pdf.cell(0, 10, f"OS: {os_id}   |   Data: {os_data['data']}", ln=1)
+            pdf.cell(0, 10, f"Cliente: {cliente['nome']}", ln=1)
+            pdf.cell(0, 10, f"Telefone: {cliente['telefone']}", ln=1)
+            pdf.cell(0, 10, f"Veículo: {veiculo['placa']} - {veiculo['modelo']}", ln=1)
+            pdf.ln(10)
+            
+            # Tabela
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(90, 10, "Descrição", 1)
+            pdf.cell(25, 10, "Qtd", 1, align="C")
+            pdf.cell(35, 10, "Preço Unit.", 1, align="C")
+            pdf.cell(35, 10, "Subtotal", 1, align="C", ln=1)
+            
+            pdf.set_font("Arial", "", 11)
+            for _, item in itens.iterrows():
+                pdf.cell(90, 10, item['descricao'][:35], 1)
+                pdf.cell(25, 10, str(item['quantidade']), 1, align="C")
+                pdf.cell(35, 10, f"R$ {item['preco']:.2f}", 1, align="C")
+                pdf.cell(35, 10, f"R$ {item['quantidade']*item['preco']:.2f}", 1, align="C", ln=1)
+            
+            pdf.ln(5)
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(0, 12, f"TOTAL: R$ {os_data['total']:.2f}", align="R", ln=1)
+            pdf.ln(10)
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 10, "Obrigado pela preferência! Oficina Mecânica", align="C")
+            
             pdf_bytes = pdf.output(dest="S")
             
             # Download
