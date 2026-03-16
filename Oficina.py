@@ -45,8 +45,47 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         text-align: center;
     }
+    div[data-testid="stMetricValue"] {
+        font-size: 24px;
+        font-weight: bold;
+    }
+    div[data-testid="stMetricDelta"] {
+        font-size: 14px;
+    }
+    .stDataFrame {
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    h1, h2, h3 {
+        color: #2c3e50;
+    }
+    .stSidebar .stRadio > label {
+        font-size: 16px;
+        padding: 10px;
+        border-radius: 5px;
+    }
+    .stSidebar .stRadio > label:hover {
+        background-color: #f0f2f6;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# ==================== FUNÇÕES AUXILIARES ====================
+def format_currency(value):
+    """Formata valor para moeda brasileira"""
+    if pd.isna(value) or value is None:
+        return "R$ 0,00"
+    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def convert_to_bytes(pdf_output):
+    """Converte diferentes tipos de retorno do FPDF para bytes"""
+    if isinstance(pdf_output, str):
+        return pdf_output.encode('latin1')
+    elif isinstance(pdf_output, bytearray):
+        return bytes(pdf_output)
+    else:
+        return pdf_output  # Já deve ser bytes
 
 # ==================== LOGIN ====================
 if "logged_in" not in st.session_state:
@@ -90,6 +129,7 @@ if not st.session_state.logged_in:
 # ==================== BANCO DE DADOS ====================
 @st.cache_resource
 def init_database():
+    """Inicializa o banco de dados e cria tabelas se não existirem"""
     conn = sqlite3.connect('oficina.db', check_same_thread=False)
     c = conn.cursor()
     
@@ -112,10 +152,7 @@ def init_database():
     c.execute('''CREATE TABLE IF NOT EXISTS despesas 
                  (id INTEGER PRIMARY KEY, data TEXT, descricao TEXT, valor REAL, categoria TEXT)''')
     
-    c.execute('''CREATE TABLE IF NOT EXISTS categorias 
-                 (id INTEGER PRIMARY KEY, nome TEXT, tipo TEXT)''')
-    
-    # Adicionar colunas se não existirem
+    # Adicionar colunas se não existirem (para compatibilidade)
     try:
         c.execute("ALTER TABLE veiculos ADD COLUMN foto BLOB")
     except:
@@ -162,15 +199,14 @@ def init_database():
 
 conn, c = init_database()
 
-# ==================== FUNÇÕES AUXILIARES ====================
-def format_currency(value):
-    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
+# ==================== FUNÇÕES DE CONSULTA ====================
 def get_clientes():
+    """Retorna lista de clientes"""
     c.execute("SELECT id, nome, telefone FROM clientes ORDER BY nome")
     return c.fetchall()
 
 def get_veiculos(cliente_id=None):
+    """Retorna lista de veículos de um cliente específico ou todos"""
     if cliente_id:
         c.execute("SELECT id, placa, modelo FROM veiculos WHERE cliente_id=? ORDER BY placa", (cliente_id,))
     else:
@@ -178,11 +214,17 @@ def get_veiculos(cliente_id=None):
     return c.fetchall()
 
 def get_os_abertas():
+    """Retorna número de OS abertas"""
     c.execute("SELECT COUNT(*) FROM os WHERE status='Aberta'")
     return c.fetchone()[0]
 
 def get_total_mes():
-    c.execute("SELECT SUM(total) FROM os WHERE strftime('%m', substr(data,7,4)||'-'||substr(data,4,2)||'-'||substr(data,1,2)) = strftime('%m', 'now')")
+    """Retorna total faturado no mês atual"""
+    c.execute("""
+        SELECT SUM(total) FROM os 
+        WHERE status='Concluída' 
+        AND strftime('%m', substr(data,7,4)||'-'||substr(data,4,2)||'-'||substr(data,1,2)) = strftime('%m', 'now')
+    """)
     return c.fetchone()[0] or 0
 
 # ==================== SIDEBAR ====================
@@ -229,22 +271,22 @@ if menu == "🏠 Dashboard":
     with col1:
         c.execute("SELECT COUNT(*) FROM clientes")
         total_clientes = c.fetchone()[0]
-        st.metric("Total Clientes", total_clientes)
+        st.metric("👥 Total Clientes", total_clientes)
     
     with col2:
         c.execute("SELECT COUNT(*) FROM veiculos")
         total_veiculos = c.fetchone()[0]
-        st.metric("Total Veículos", total_veiculos)
+        st.metric("🚗 Total Veículos", total_veiculos)
     
     with col3:
         c.execute("SELECT COUNT(*) FROM os WHERE status='Aberta'")
         os_abertas = c.fetchone()[0]
-        st.metric("OS em Aberto", os_abertas)
+        st.metric("📋 OS em Aberto", os_abertas)
     
     with col4:
         c.execute("SELECT COUNT(*) FROM os WHERE status='Concluída'")
         os_concluidas = c.fetchone()[0]
-        st.metric("OS Concluídas", os_concluidas)
+        st.metric("✅ OS Concluídas", os_concluidas)
     
     st.markdown("---")
     
@@ -259,21 +301,38 @@ if menu == "🏠 Dashboard":
             JOIN clientes ON os.cliente_id = clientes.id 
             ORDER BY os.id DESC LIMIT 5
         """, conn)
-        st.dataframe(df_ultimas, use_container_width=True)
+        
+        if not df_ultimas.empty:
+            df_ultimas['total'] = df_ultimas['total'].apply(format_currency)
+            st.dataframe(df_ultimas, use_container_width=True)
+        else:
+            st.info("Nenhuma OS cadastrada ainda")
     
     with col2:
         st.subheader("💰 Receita vs Despesas (Mês)")
-        c.execute("SELECT SUM(total) FROM os WHERE strftime('%m', substr(data,7,4)||'-'||substr(data,4,2)||'-'||substr(data,1,2)) = strftime('%m', 'now')")
+        
+        # Receita do mês
+        c.execute("""
+            SELECT SUM(total) FROM os 
+            WHERE status='Concluída' 
+            AND strftime('%m', substr(data,7,4)||'-'||substr(data,4,2)||'-'||substr(data,1,2)) = strftime('%m', 'now')
+        """)
         receita_mes = c.fetchone()[0] or 0
         
-        c.execute("SELECT SUM(valor) FROM despesas WHERE strftime('%m', substr(data,7,4)||'-'||substr(data,4,2)||'-'||substr(data,1,2)) = strftime('%m', 'now')")
+        # Despesa do mês
+        c.execute("""
+            SELECT SUM(valor) FROM despesas 
+            WHERE strftime('%m', substr(data,7,4)||'-'||substr(data,4,2)||'-'||substr(data,1,2)) = strftime('%m', 'now')
+        """)
         despesa_mes = c.fetchone()[0] or 0
         
-        df_financeiro = pd.DataFrame({
-            "Tipo": ["Receita", "Despesa", "Lucro"],
-            "Valor": [receita_mes, despesa_mes, receita_mes - despesa_mes]
-        })
-        st.dataframe(df_financeiro, use_container_width=True)
+        lucro_mes = receita_mes - despesa_mes
+        
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("Receita", format_currency(receita_mes))
+        col_b.metric("Despesa", format_currency(despesa_mes))
+        col_c.metric("Lucro", format_currency(lucro_mes), 
+                    delta=f"{((lucro_mes/receita_mes)*100 if receita_mes > 0 else 0):.1f}%")
 
 # ==================== CADASTRAR CLIENTE ====================
 elif menu == "👤 Cadastrar Cliente":
@@ -296,13 +355,16 @@ elif menu == "👤 Cadastrar Cliente":
         
         if submitted:
             if nome and telefone:
-                c.execute("""
-                    INSERT INTO clientes (nome, telefone, cpf, email, endereco) 
-                    VALUES (?,?,?,?,?)
-                """, (nome, telefone, cpf, email, endereco))
-                conn.commit()
-                st.success("✅ Cliente cadastrado com sucesso!")
-                st.balloons()
+                try:
+                    c.execute("""
+                        INSERT INTO clientes (nome, telefone, cpf, email, endereco) 
+                        VALUES (?,?,?,?,?)
+                    """, (nome, telefone, cpf, email, endereco))
+                    conn.commit()
+                    st.success("✅ Cliente cadastrado com sucesso!")
+                    st.balloons()
+                except Exception as e:
+                    st.error(f"Erro ao cadastrar: {str(e)}")
             else:
                 st.error("❌ Nome e telefone são obrigatórios!")
 
@@ -336,23 +398,30 @@ elif menu == "🚘 Cadastrar Veículo":
             
             if submitted:
                 if placa and modelo:
-                    cliente_id = cliente_dict[cliente_selecionado]
-                    foto_bytes = foto.read() if foto else None
-                    
-                    c.execute("""
-                        INSERT INTO veiculos (cliente_id, placa, modelo, ano, cor, foto, observacoes) 
-                        VALUES (?,?,?,?,?,?,?)
-                    """, (cliente_id, placa, modelo, ano, cor, foto_bytes, observacoes))
-                    
-                    conn.commit()
-                    st.success("✅ Veículo cadastrado com sucesso!")
-                    st.balloons()
+                    try:
+                        cliente_id = cliente_dict[cliente_selecionado]
+                        foto_bytes = foto.read() if foto else None
+                        
+                        c.execute("""
+                            INSERT INTO veiculos (cliente_id, placa, modelo, ano, cor, foto, observacoes) 
+                            VALUES (?,?,?,?,?,?,?)
+                        """, (cliente_id, placa, modelo, ano, cor, foto_bytes, observacoes))
+                        
+                        conn.commit()
+                        st.success("✅ Veículo cadastrado com sucesso!")
+                        st.balloons()
+                    except Exception as e:
+                        st.error(f"Erro ao cadastrar: {str(e)}")
                 else:
                     st.error("❌ Placa e modelo são obrigatórios!")
 
 # ==================== NOVA ORDEM DE SERVIÇO ====================
 elif menu == "📋 Nova Ordem de Serviço":
     st.title("📋 Nova Ordem de Serviço")
+    
+    # Inicializar sessão para itens
+    if "itens_os" not in st.session_state:
+        st.session_state.itens_os = []
     
     # Seleção de cliente e veículo
     col1, col2 = st.columns(2)
@@ -387,9 +456,6 @@ elif menu == "📋 Nova Ordem de Serviço":
     
     # Itens da OS
     st.subheader("🛠️ Itens da Ordem de Serviço")
-    
-    if "itens_os" not in st.session_state:
-        st.session_state.itens_os = []
     
     # Formulário para adicionar itens
     col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
@@ -435,25 +501,28 @@ elif menu == "📋 Nova Ordem de Serviço":
         
         # Botão para salvar
         if st.button("💾 Salvar Ordem de Serviço", type="primary", use_container_width=True):
-            c.execute("""
-                INSERT INTO os (data, cliente_id, veiculo_id, total, status, forma_pagamento, observacoes) 
-                VALUES (?,?,?,?,?,?,?)
-            """, (datetime.now().strftime("%d/%m/%Y"), cliente_id, veiculo_id, 
-                  total_os, "Aberta", forma_pagamento, observacoes))
-            
-            os_id = c.lastrowid
-            
-            for item in st.session_state.itens_os:
+            try:
                 c.execute("""
-                    INSERT INTO os_itens (os_id, descricao, quantidade, preco, tipo) 
-                    VALUES (?,?,?,?,?)
-                """, (os_id, item["descricao"], item["quantidade"], item["preco"], item["tipo"]))
-            
-            conn.commit()
-            st.success(f"✅ Ordem de Serviço #{os_id} salva com sucesso!")
-            st.balloons()
-            st.session_state.itens_os = []
-            st.rerun()
+                    INSERT INTO os (data, cliente_id, veiculo_id, total, status, forma_pagamento, observacoes) 
+                    VALUES (?,?,?,?,?,?,?)
+                """, (datetime.now().strftime("%d/%m/%Y"), cliente_id, veiculo_id, 
+                      total_os, "Aberta", forma_pagamento, observacoes))
+                
+                os_id = c.lastrowid
+                
+                for item in st.session_state.itens_os:
+                    c.execute("""
+                        INSERT INTO os_itens (os_id, descricao, quantidade, preco, tipo) 
+                        VALUES (?,?,?,?,?)
+                    """, (os_id, item["descricao"], item["quantidade"], item["preco"], item["tipo"]))
+                
+                conn.commit()
+                st.success(f"✅ Ordem de Serviço #{os_id} salva com sucesso!")
+                st.balloons()
+                st.session_state.itens_os = []
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao salvar: {str(e)}")
     else:
         st.info("Adicione itens à ordem de serviço")
 
@@ -581,14 +650,17 @@ elif menu == "👥 Gerenciar Clientes":
                         novo_endereco = st.text_input("Endereço", value=dados[5] if len(dados) > 5 else "")
                         
                         if st.form_submit_button("💾 Salvar Alterações", use_container_width=True):
-                            c.execute("""
-                                UPDATE clientes 
-                                SET nome=?, telefone=?, cpf=?, email=?, endereco=? 
-                                WHERE id=?
-                            """, (novo_nome, novo_telefone, novo_cpf, novo_email, novo_endereco, cliente_id))
-                            conn.commit()
-                            st.success("✅ Cliente atualizado!")
-                            st.rerun()
+                            try:
+                                c.execute("""
+                                    UPDATE clientes 
+                                    SET nome=?, telefone=?, cpf=?, email=?, endereco=? 
+                                    WHERE id=?
+                                """, (novo_nome, novo_telefone, novo_cpf, novo_email, novo_endereco, cliente_id))
+                                conn.commit()
+                                st.success("✅ Cliente atualizado!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao atualizar: {str(e)}")
                 else:
                     st.error("Cliente não encontrado")
         
@@ -608,10 +680,13 @@ elif menu == "👥 Gerenciar Clientes":
                 if tem_veiculos or tem_os:
                     st.error("Não é possível excluir cliente com veículos ou OS vinculadas!")
                 else:
-                    c.execute("DELETE FROM clientes WHERE id=?", (cliente_id_del,))
-                    conn.commit()
-                    st.success("✅ Cliente excluído!")
-                    st.rerun()
+                    try:
+                        c.execute("DELETE FROM clientes WHERE id=?", (cliente_id_del,))
+                        conn.commit()
+                        st.success("✅ Cliente excluído!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao excluir: {str(e)}")
     else:
         st.info("Nenhum cliente cadastrado")
 
@@ -626,23 +701,26 @@ elif menu == "💰 Relatório de Gastos e Lucro":
     with col2:
         data_fim = st.date_input("Data Fim", value=datetime.now())
     
-    # Converter datas para string no formato dd/mm/aaaa
-    inicio_str = data_inicio.strftime("%d/%m/%Y")
-    fim_str = data_fim.strftime("%d/%m/%Y")
+    # Converter datas para comparação no formato YYYYMMDD
+    inicio_comp = data_inicio.strftime("%Y%m%d")
+    fim_comp = data_fim.strftime("%Y%m%d")
     
     # Consultas com filtro de data
-    total_os = pd.read_sql_query("""
-        SELECT SUM(total) as total FROM os 
-        WHERE substr(data,7,4)||substr(data,4,2)||substr(data,1,2) 
-        BETWEEN ? AND ?
-    """, conn, params=[data_inicio.strftime("%Y%m%d"), data_fim.strftime("%Y%m%d")]).iloc[0]['total'] or 0
+    df_os_periodo = pd.read_sql_query("""
+        SELECT * FROM os 
+        WHERE status='Concluída'
+        AND substr(data,7,4)||substr(data,4,2)||substr(data,1,2) BETWEEN ? AND ?
+        ORDER BY data
+    """, conn, params=[inicio_comp, fim_comp])
     
-    total_despesas = pd.read_sql_query("""
-        SELECT SUM(valor) as total FROM despesas 
-        WHERE substr(data,7,4)||substr(data,4,2)||substr(data,1,2) 
-        BETWEEN ? AND ?
-    """, conn, params=[data_inicio.strftime("%Y%m%d"), data_fim.strftime("%Y%m%d")]).iloc[0]['total'] or 0
+    df_despesas_periodo = pd.read_sql_query("""
+        SELECT * FROM despesas 
+        WHERE substr(data,7,4)||substr(data,4,2)||substr(data,1,2) BETWEEN ? AND ?
+        ORDER BY data
+    """, conn, params=[inicio_comp, fim_comp])
     
+    total_os = df_os_periodo['total'].sum() if not df_os_periodo.empty else 0
+    total_despesas = df_despesas_periodo['valor'].sum() if not df_despesas_periodo.empty else 0
     lucro = total_os - total_despesas
     
     # Métricas
@@ -660,23 +738,28 @@ elif menu == "💰 Relatório de Gastos e Lucro":
     with col3:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         delta_color = "normal" if lucro >= 0 else "inverse"
-        st.metric("💵 LUCRO", format_currency(lucro), delta=f"{((lucro/total_os)*100 if total_os > 0 else 0):.1f}%", delta_color=delta_color)
+        st.metric("💵 LUCRO", format_currency(lucro), 
+                 delta=f"{((lucro/total_os)*100 if total_os > 0 else 0):.1f}%", 
+                 delta_color=delta_color)
         st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # Despesas do período
-    st.subheader("📋 Despesas do Período")
-    df_despesas = pd.read_sql_query("""
-        SELECT * FROM despesas 
-        WHERE substr(data,7,4)||substr(data,4,2)||substr(data,1,2) 
-        BETWEEN ? AND ?
-        ORDER BY data DESC
-    """, conn, params=[data_inicio.strftime("%Y%m%d"), data_fim.strftime("%Y%m%d")])
+    # Listagem de OS do período
+    st.subheader("📋 Ordens de Serviço Concluídas no Período")
+    if not df_os_periodo.empty:
+        df_os_periodo['total'] = df_os_periodo['total'].apply(format_currency)
+        st.dataframe(df_os_periodo[['id', 'data', 'total', 'forma_pagamento']], use_container_width=True)
+    else:
+        st.info("Nenhuma OS concluída no período")
     
-    if not df_despesas.empty:
-        df_despesas['valor'] = df_despesas['valor'].apply(format_currency)
-        st.dataframe(df_despesas, use_container_width=True)
+    # Listagem de despesas do período
+    st.subheader("📋 Despesas do Período")
+    if not df_despesas_periodo.empty:
+        df_despesas_periodo['valor'] = df_despesas_periodo['valor'].apply(format_currency)
+        st.dataframe(df_despesas_periodo[['data', 'descricao', 'categoria', 'valor']], use_container_width=True)
+    else:
+        st.info("Nenhuma despesa no período")
     
     st.markdown("---")
     st.subheader("➕ Adicionar Nova Despesa")
@@ -692,13 +775,16 @@ elif menu == "💰 Relatório de Gastos e Lucro":
         
         if st.form_submit_button("💾 Registrar Despesa", use_container_width=True):
             if desc_despesa and valor_despesa > 0:
-                c.execute("""
-                    INSERT INTO despesas (data, descricao, valor, categoria) 
-                    VALUES (?,?,?,?)
-                """, (datetime.now().strftime("%d/%m/%Y"), desc_despesa, valor_despesa, categoria))
-                conn.commit()
-                st.success("✅ Despesa registrada!")
-                st.rerun()
+                try:
+                    c.execute("""
+                        INSERT INTO despesas (data, descricao, valor, categoria) 
+                        VALUES (?,?,?,?)
+                    """, (datetime.now().strftime("%d/%m/%Y"), desc_despesa, valor_despesa, categoria))
+                    conn.commit()
+                    st.success("✅ Despesa registrada!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao registrar: {str(e)}")
             else:
                 st.error("Preencha todos os campos!")
 
@@ -758,7 +844,7 @@ elif menu == "📄 Gerar NF-e (PDF)":
                 pdf.cell(0, 8, f"ORDEM DE SERVIÇO Nº {os_id}", 0, 1, "L", 1)
                 pdf.ln(5)
                 
-                # Dados da OS em caixas
+                # Dados da OS
                 pdf.set_font("Arial", "B", 10)
                 pdf.cell(30, 8, "Data:", 0, 0)
                 pdf.set_font("Arial", "", 10)
@@ -895,8 +981,9 @@ elif menu == "📄 Gerar NF-e (PDF)":
                 pdf.cell(0, 5, "Documento gerado em " + datetime.now().strftime("%d/%m/%Y %H:%M"), 0, 1, "C")
                 pdf.cell(0, 5, "Oficina Mecânica Express - Qualidade em serviços automotivos", 0, 1, "C")
                 
-                # Gerar PDF em bytes
-                pdf_bytes = pdf.output(dest='S').encode('latin1')
+                # 🔥 CORREÇÃO PRINCIPAL - Converter para bytes corretamente
+                pdf_output = pdf.output(dest='S')
+                pdf_bytes = convert_to_bytes(pdf_output)
                 
                 # Botão de download
                 st.download_button(
@@ -911,7 +998,8 @@ elif menu == "📄 Gerar NF-e (PDF)":
                 st.markdown("---")
                 st.subheader("📱 Enviar por WhatsApp")
                 
-                telefone = cliente['telefone'].replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+                # Limpar telefone
+                telefone = str(cliente['telefone']).replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
                 if telefone:
                     if not telefone.startswith("55"):
                         telefone = "55" + telefone
