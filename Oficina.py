@@ -7,67 +7,122 @@ import urllib.parse
 import os
 from io import BytesIO
 
+# ==================== CONFIGURAÇÕES DA EMPRESA ====================
+EMPRESA = {
+    "nome": "Oficina Mecânica Express",
+    "nome_fantasia": "Express Auto Center",
+    "cnpj": "12.345.678/0001-90",
+    "ie": "123.456.789.000",
+    "telefone": "(11) 3333-4444",
+    "celular": "(11) 99999-9999",
+    "email": "contato@expressauto.com.br",
+    "site": "www.expressauto.com.br",
+    "endereco": "Rua das Oficinas, 123 - Jardim das Autopeças",
+    "cidade": "São Paulo - SP",
+    "cep": "01234-567",
+    "logo": "🚗",  # Emoji para representar logo (pode substituir por caminho de imagem)
+    "slogan": "Qualidade e confiança em serviços automotivos",
+    "redes_sociais": {
+        "instagram": "@expressauto",
+        "facebook": "/expressauto",
+        "whatsapp": "5511999999999"
+    }
+}
+
 # ==================== CONFIGURAÇÃO INICIAL ====================
-st.set_page_config(page_title="Oficina Mecânica", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title=f"{EMPRESA['nome_fantasia']} - Sistema", 
+    layout="wide", 
+    initial_sidebar_state="expanded",
+    page_icon="🚗"
+)
 
 # ==================== ESTILO CSS PERSONALIZADO ====================
-st.markdown("""
+st.markdown(f"""
 <style>
-    .stButton > button {
+    .stButton > button {{
         width: 100%;
         background-color: #FF4B4B;
         color: white;
         font-weight: bold;
-    }
-    .stDownloadButton > button {
+    }}
+    .stDownloadButton > button {{
         background-color: #28a745;
         color: white;
         font-weight: bold;
-    }
-    .success-box {
+    }}
+    .success-box {{
         padding: 20px;
         border-radius: 10px;
         background-color: #d4edda;
         border: 1px solid #c3e6cb;
         color: #155724;
-    }
-    .warning-box {
+    }}
+    .warning-box {{
         padding: 20px;
         border-radius: 10px;
         background-color: #fff3cd;
         border: 1px solid #ffeeba;
         color: #856404;
-    }
-    .metric-card {
+    }}
+    .metric-card {{
         background-color: #f8f9fa;
         padding: 20px;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         text-align: center;
-    }
-    div[data-testid="stMetricValue"] {
+    }}
+    div[data-testid="stMetricValue"] {{
         font-size: 24px;
         font-weight: bold;
-    }
-    div[data-testid="stMetricDelta"] {
+    }}
+    div[data-testid="stMetricDelta"] {{
         font-size: 14px;
-    }
-    .stDataFrame {
+    }}
+    .stDataFrame {{
         border: 1px solid #ddd;
         border-radius: 10px;
         overflow: hidden;
-    }
-    h1, h2, h3 {
+    }}
+    h1, h2, h3 {{
         color: #2c3e50;
-    }
-    .stSidebar .stRadio > label {
+    }}
+    .stSidebar .stRadio > label {{
         font-size: 16px;
         padding: 10px;
         border-radius: 5px;
-    }
-    .stSidebar .stRadio > label:hover {
+    }}
+    .stSidebar .stRadio > label:hover {{
         background-color: #f0f2f6;
-    }
+    }}
+    .empresa-header {{
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }}
+    .empresa-logo {{
+        font-size: 48px;
+        text-align: center;
+    }}
+    .empresa-nome {{
+        font-size: 24px;
+        font-weight: bold;
+        text-align: center;
+    }}
+    .empresa-info {{
+        font-size: 14px;
+        text-align: center;
+        opacity: 0.9;
+    }}
+    .login-header {{
+        text-align: center;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px 10px 0 0;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -87,6 +142,21 @@ def convert_to_bytes(pdf_output):
     else:
         return pdf_output  # Já deve ser bytes
 
+def show_empresa_header():
+    """Mostra cabeçalho da empresa na dashboard"""
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown(f"""
+        <div class="empresa-header">
+            <div class="empresa-logo">{EMPRESA['logo']}</div>
+            <div class="empresa-nome">{EMPRESA['nome']}</div>
+            <div class="empresa-info">{EMPRESA['slogan']}</div>
+            <div class="empresa-info">{EMPRESA['endereco']} - {EMPRESA['cidade']}</div>
+            <div class="empresa-info">📞 {EMPRESA['telefone']} | 📱 {EMPRESA['celular']}</div>
+            <div class="empresa-info">✉️ {EMPRESA['email']} | 🌐 {EMPRESA['site']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
 # ==================== LOGIN ====================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -100,10 +170,22 @@ USUARIOS = {
 }
 
 if not st.session_state.logged_in:
-    col1, col2, col3 = st.columns([1,2,1])
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("## 🔐 Login - Oficina Mecânica")
+        # Cabeçalho da empresa na tela de login
+        st.markdown(f"""
+        <div class="login-header">
+            <div style="font-size: 64px;">{EMPRESA['logo']}</div>
+            <div style="font-size: 28px; font-weight: bold;">{EMPRESA['nome']}</div>
+            <div style="font-size: 16px;">{EMPRESA['slogan']}</div>
+            <div style="font-size: 14px; margin-top: 10px;">{EMPRESA['endereco']}</div>
+            <div style="font-size: 14px;">{EMPRESA['telefone']} | {EMPRESA['email']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
         st.markdown("---")
+        st.markdown("## 🔐 Acesso ao Sistema")
+        
         with st.form("login_form"):
             usuario = st.text_input("👤 Usuário", placeholder="Digite seu usuário")
             senha = st.text_input("🔑 Senha", type="password", placeholder="Digite sua senha")
@@ -124,6 +206,16 @@ if not st.session_state.logged_in:
             - **mecanico** / oficina2025
             - **gerente** / gerente123
             """)
+        
+        # Rodapé da empresa no login
+        st.markdown("---")
+        st.markdown(f"""
+        <div style="text-align: center; color: gray; font-size: 12px;">
+            {EMPRESA['nome']} - {EMPRESA['cnpj']}<br>
+            {EMPRESA['endereco']} - {EMPRESA['cidade']} - CEP: {EMPRESA['cep']}<br>
+            © {datetime.now().year} - Todos os direitos reservados
+        </div>
+        """, unsafe_allow_html=True)
     st.stop()
 
 # ==================== BANCO DE DADOS ====================
@@ -229,6 +321,15 @@ def get_total_mes():
 
 # ==================== SIDEBAR ====================
 with st.sidebar:
+    # Informações da empresa na sidebar
+    st.markdown(f"""
+    <div style="text-align: center; padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px; margin-bottom: 20px;">
+        <div style="font-size: 32px;">{EMPRESA['logo']}</div>
+        <div style="font-size: 16px; font-weight: bold;">{EMPRESA['nome_fantasia']}</div>
+        <div style="font-size: 10px;">{EMPRESA['cnpj']}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.markdown(f"### 👋 Olá, **{st.session_state.username}**!")
     st.markdown("---")
     
@@ -257,13 +358,27 @@ with st.sidebar:
     
     st.markdown("---")
     
+    # Informações de contato na sidebar
+    with st.expander("📞 Contato da Empresa"):
+        st.markdown(f"""
+        **Telefone:** {EMPRESA['telefone']}  
+        **WhatsApp:** {EMPRESA['celular']}  
+        **Email:** {EMPRESA['email']}  
+        **Site:** {EMPRESA['site']}  
+        **Instagram:** {EMPRESA['redes_sociais']['instagram']}  
+        **Facebook:** {EMPRESA['redes_sociais']['facebook']}
+        """)
+    
     if st.button("🚪 Sair", use_container_width=True):
         st.session_state.logged_in = False
         st.rerun()
 
 # ==================== DASHBOARD ====================
 if menu == "🏠 Dashboard":
-    st.title("🏠 Dashboard - Oficina Mecânica")
+    st.title(f"🏠 {EMPRESA['nome_fantasia']} - Dashboard")
+    
+    # Mostrar cabeçalho da empresa
+    show_empresa_header()
     
     # Métricas principais
     col1, col2, col3, col4 = st.columns(4)
@@ -822,26 +937,35 @@ elif menu == "📄 Gerar NF-e (PDF)":
                 pdf = FPDF()
                 pdf.add_page()
                 
-                # Cabeçalho
+                # ===== CABEÇALHO DA EMPRESA NO PDF =====
                 pdf.set_fill_color(52, 73, 94)
                 pdf.set_text_color(255, 255, 255)
                 pdf.set_font("Arial", "B", 20)
-                pdf.cell(0, 20, "NOTA FISCAL DE SERVIÇOS", 0, 1, "C", 1)
-                pdf.ln(10)
+                pdf.cell(0, 15, EMPRESA['nome'].upper(), 0, 1, "C", 1)
+                
+                pdf.set_font("Arial", "", 10)
+                pdf.cell(0, 6, EMPRESA['slogan'], 0, 1, "C", 1)
+                pdf.ln(5)
                 
                 # Informações da empresa
                 pdf.set_text_color(0, 0, 0)
-                pdf.set_font("Arial", "B", 12)
-                pdf.cell(0, 8, "OFICINA MECÂNICA EXPRESS", 0, 1, "C")
+                pdf.set_font("Arial", "B", 10)
+                pdf.cell(0, 6, f"CNPJ: {EMPRESA['cnpj']} | IE: {EMPRESA['ie']}", 0, 1, "C")
+                pdf.cell(0, 6, f"{EMPRESA['endereco']} - {EMPRESA['cidade']} - CEP: {EMPRESA['cep']}", 0, 1, "C")
                 pdf.set_font("Arial", "", 10)
-                pdf.cell(0, 6, "CNPJ: 12.345.678/0001-90", 0, 1, "C")
-                pdf.cell(0, 6, "Tel: (11) 99999-9999 | E-mail: contato@oficina.com", 0, 1, "C")
+                pdf.cell(0, 6, f"Tel: {EMPRESA['telefone']} | Cel: {EMPRESA['celular']} | Email: {EMPRESA['email']}", 0, 1, "C")
+                pdf.ln(10)
+                
+                # Linha divisória
+                pdf.set_draw_color(52, 73, 94)
+                pdf.set_line_width(0.5)
+                pdf.line(10, pdf.get_y(), 200, pdf.get_y())
                 pdf.ln(10)
                 
                 # Informações da OS
                 pdf.set_fill_color(240, 240, 240)
-                pdf.set_font("Arial", "B", 12)
-                pdf.cell(0, 8, f"ORDEM DE SERVIÇO Nº {os_id}", 0, 1, "L", 1)
+                pdf.set_font("Arial", "B", 14)
+                pdf.cell(0, 10, f"NOTA FISCAL DE SERVIÇOS - OS Nº {os_id}", 0, 1, "C", 1)
                 pdf.ln(5)
                 
                 # Dados da OS
@@ -975,13 +1099,23 @@ elif menu == "📄 Gerar NF-e (PDF)":
                     pdf.multi_cell(0, 5, os_data['observacoes'])
                     pdf.ln(5)
                 
-                # Rodapé
-                pdf.set_y(-35)
-                pdf.set_font("Arial", "", 8)
-                pdf.cell(0, 5, "Documento gerado em " + datetime.now().strftime("%d/%m/%Y %H:%M"), 0, 1, "C")
-                pdf.cell(0, 5, "Oficina Mecânica Express - Qualidade em serviços automotivos", 0, 1, "C")
+                # ===== RODAPÉ DA EMPRESA NO PDF =====
+                pdf.set_y(-45)
+                pdf.set_draw_color(52, 73, 94)
+                pdf.set_line_width(0.5)
+                pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+                pdf.ln(5)
                 
-                # 🔥 CORREÇÃO PRINCIPAL - Converter para bytes corretamente
+                pdf.set_font("Arial", "B", 9)
+                pdf.cell(0, 5, EMPRESA['nome'].upper(), 0, 1, "C")
+                pdf.set_font("Arial", "", 8)
+                pdf.cell(0, 4, EMPRESA['endereco'], 0, 1, "C")
+                pdf.cell(0, 4, f"Tel: {EMPRESA['telefone']} | WhatsApp: {EMPRESA['celular']} | {EMPRESA['email']}", 0, 1, "C")
+                pdf.cell(0, 4, f"{EMPRESA['site']} | {EMPRESA['redes_sociais']['instagram']}", 0, 1, "C")
+                pdf.ln(2)
+                pdf.cell(0, 4, f"Documento gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, "C")
+                
+                # 🔥 CORREÇÃO - Converter para bytes corretamente
                 pdf_output = pdf.output(dest='S')
                 pdf_bytes = convert_to_bytes(pdf_output)
                 
@@ -989,7 +1123,7 @@ elif menu == "📄 Gerar NF-e (PDF)":
                 st.download_button(
                     label="📥 Baixar PDF",
                     data=pdf_bytes,
-                    file_name=f"NF-e_OS_{os_id}.pdf",
+                    file_name=f"NF-e_{EMPRESA['nome_fantasia'].replace(' ', '_')}_OS_{os_id}.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
@@ -1004,7 +1138,7 @@ elif menu == "📄 Gerar NF-e (PDF)":
                     if not telefone.startswith("55"):
                         telefone = "55" + telefone
                     
-                    mensagem = f"Olá! Segue a NF-e da OS #{os_id} no valor de {format_currency(total)}. Qualquer dúvida, estamos à disposição!"
+                    mensagem = f"Olá! Segue a NF-e da OS #{os_id} no valor de {format_currency(total)}. {EMPRESA['nome']} - {EMPRESA['telefone']}"
                     
                     link_whatsapp = f"https://wa.me/{telefone}?text={urllib.parse.quote(mensagem)}"
                     
@@ -1020,9 +1154,12 @@ elif menu == "📄 Gerar NF-e (PDF)":
 # ==================== RODAPÉ ====================
 st.sidebar.markdown("---")
 st.sidebar.markdown(
-    "<p style='text-align: center; color: gray;'>"
-    "Sistema de Oficina Mecânica v2.0<br>"
-    "Desenvolvido com ❤️ e Streamlit"
-    "</p>", 
+    f"""
+    <div style='text-align: center; color: gray; font-size: 11px;'>
+        {EMPRESA['nome']}<br>
+        {EMPRESA['cnpj']}<br>
+        © {datetime.now().year} - v2.0
+    </div>
+    """, 
     unsafe_allow_html=True
 )
